@@ -127,6 +127,7 @@ def sample_returns_Q_std(
     while left > 0:
         m = min(chunk, left)
         outs.append(once(m))
+        torch.cuda.empty_cache()
         left -= m
 
     Y_std = torch.cat(outs, 0).view(n_paths, H_steps, 1).squeeze(-1)  # (n_paths, H_steps)
