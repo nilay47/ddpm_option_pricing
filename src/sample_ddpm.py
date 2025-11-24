@@ -123,7 +123,7 @@ def sample_returns_Q_std(
     needed = n_paths * H_steps
     outs = []
     left = needed
-    chunk = min(100_000, needed)
+    chunk = min(1000, needed)
     while left > 0:
         m = min(chunk, left)
         outs.append(once(m))
