@@ -35,6 +35,7 @@ def rn_constants_std(
     noise_shift_std = eta_t_std * torch.sqrt(1 - alpha_bar)     # (T,)
     return noise_shift_std                                      # (T,)
 
+@torch.no_grad()
 def sample_returns_Q_std(
         model: torch.nn.Module,
         n_paths: int,
@@ -123,12 +124,13 @@ def sample_returns_Q_std(
     needed = n_paths * H_steps
     outs = []
     left = needed
-    chunk = min(1000, needed)
+    chunk = min(10_000, needed)
     while left > 0:
         m = min(chunk, left)
-        outs.append(once(m))
-        torch.cuda.empty_cache()
+        y_chunk = once(m).cpu()         # move chunk to CPU
+        outs.append(y_chunk)
         left -= m
+        torch.cuda.empty_cache()
 
     Y_std = torch.cat(outs, 0).view(n_paths, H_steps, 1).squeeze(-1)  # (n_paths, H_steps)
 
