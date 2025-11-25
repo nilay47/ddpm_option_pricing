@@ -27,10 +27,9 @@ def rn_constants_std(
         torch.Tensor: Standardized constants for the Risk-Neutral diffusion process.
     """
     alpha_bar = alphas_bar.to(device, dtype=torch.float32)      # (T,)
-    alpha_t = torch.sqrt(alpha_bar)
 
     dm_std = (r - mu) * dt / s0
-    eta_t_std = alpha_t * dm_std
+    eta_t_std = torch.sqrt(alpha_bar) * dm_std
 
     noise_shift_std = eta_t_std * torch.sqrt(1 - alpha_bar)     # (T,)
     return noise_shift_std                                      # (T,)
