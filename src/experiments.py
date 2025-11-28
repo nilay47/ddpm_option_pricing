@@ -138,6 +138,45 @@ def martingale_check(
 
     return out
 
+def martingale_trajectory(
+    returns_Q: np.ndarray,
+    S0: float,
+    r: float,
+    dt: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Full martingale trajectory:
+        M_t = e^{-rt} E_Q[S_t]
+    for t = 0,1,...,H_steps.
+
+    Args:
+        returns_Q: (n_paths, H_steps) log-returns.
+        S0: spot.
+        r: risk free rate.
+        dt: time step.
+
+    Returns:
+        times: shape (H_steps+1,), in years.
+        M:     shape (H_steps+1,), discounted expected prices.
+    """
+    if returns_Q.ndim != 2:
+        raise ValueError(f"returns_Q must have shape (n_paths, H_steps), got {returns_Q.shape}")
+
+    n_paths, H_steps = returns_Q.shape
+    S = np.full((n_paths,), S0, dtype=np.float64)
+
+    times = [0.0]
+    M = [S0]  # at t = 0, e^{-0} E[S0] = S0
+
+    for t in range(1, H_steps + 1):
+        S *= np.exp(returns_Q[:, t - 1])
+        tau = t * dt
+        disc = math.exp(-r * tau)
+        M.append(disc * S.mean())
+        times.append(tau)
+
+    return np.array(times), np.array(M)
+
 
 def terminal_ks_test(
     returns_Q: np.ndarray,
