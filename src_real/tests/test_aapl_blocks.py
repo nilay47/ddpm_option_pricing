@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from src_real.data.prices_yf import load_prices_yfinance
-from src_real.data.blocks import make_return_blocks  # if your function name differs, tell me
+from src_real.data.blocks import build_return_blocks  # if your function name differs, tell me
 
 def main():
     ticker = "AAPL"
