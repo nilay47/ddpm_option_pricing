@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 from src.price_options import black_scholes_price, ddpm_price_from_returns
-from src.price_options import martingale_trajectory
+from src.experiments import martingale_trajectory
 
 from src_v2.finance.sample_returns_shifted import sample_returns_Q_epsilon_shift
 
