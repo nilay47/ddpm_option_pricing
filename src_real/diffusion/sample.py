@@ -14,6 +14,7 @@ def sample_blocks_ddpm(
     betas: torch.Tensor,
     device: torch.device,
     chunk: int = 5000,
+    temperature: float = 1.0,
 ) -> np.ndarray:
     model.eval()
 
@@ -52,7 +53,7 @@ def sample_blocks_ddpm(
             post_var = beta_t * (1.0 - a_bar_prev) / (1.0 - a_bar_t)
             post_var = torch.clamp(post_var, min=1e-12)
 
-            x = mean + torch.sqrt(post_var) * torch.randn_like(x)
+            x = mean + temperature * torch.sqrt(post_var) * torch.randn_like(x)
 
         return x
 
