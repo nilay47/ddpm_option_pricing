@@ -11,7 +11,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from src.schedules import make_alpha_schedule
+from src_real.schedules import make_alpha_schedule
 from src_real.data.blocks import (
     log_returns_from_prices,
     build_return_blocks,
@@ -110,7 +110,12 @@ def run_smile_from_prices(
     x_train = torch.from_numpy(Z_train).float()
 
     # 2) schedules
-    betas, alphas, alphas_bar = make_alpha_schedule(T=cfg.T_diffusion, device=device)
+    betas, alphas, alphas_bar = make_alpha_schedule(
+        T=cfg.T_diffusion,
+        device=device,
+        schedule="linear",
+        beta_max=2e-2,
+    )
 
     # 3) model
     model = ScoreMLPVec(H=cfg.H, hidden_dim=cfg.hidden_dim, time_emb_dim=cfg.time_emb_dim).to(device)
