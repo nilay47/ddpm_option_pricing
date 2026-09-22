@@ -154,3 +154,21 @@ def sliced_wasserstein(X: np.ndarray, Y: np.ndarray, n_proj: int = 256, seed: in
         qy = np.quantile(py, q)
         tot += np.mean((qx - qy) ** 2)
     return float(np.sqrt(tot / n_proj))
+
+
+# --------------------------------------------------------------------------
+# matched-compute comparison: weighted representation vs amortized sampler
+# --------------------------------------------------------------------------
+
+def resample_weighted(z: np.ndarray, w: np.ndarray, n: int, seed: int = 0) -> np.ndarray:
+    """Multinomial resampling of a weighted P_theta pool -- the weighted
+    representation's way of producing n 'unweighted' paths."""
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(len(z), size=n, replace=True, p=w / w.sum())
+    return z[idx]
+
+
+def compute_budget(n_paths: int, n_steps: int, seconds: float) -> dict:
+    """Book-keeping for the matched-compute table: network evaluations and wall-clock."""
+    return dict(n_paths=int(n_paths), n_steps=int(n_steps), net_evals=int(n_paths) * int(n_steps),
+                seconds=float(seconds))
