@@ -1,0 +1,10 @@
+artifacts_taskc/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+artifacts_gauss/
+artifacts_gauss_colab/
+docs/
+taskc/DECISIONS.md
+taskb/full_run.log
+taskb/volgap.log
