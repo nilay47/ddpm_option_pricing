@@ -1,0 +1,41 @@
+{
+ "standardizer": {
+  "m": 0.00032007972903931055,
+  "s": 0.012599131548282908,
+  "S0": 100.0,
+  "r": 0.05,
+  "dt": 0.003968253968253968
+ },
+ "recipe": {
+  "epochs": 450,
+  "lr": 0.001,
+  "lr_min": 1e-05,
+  "weight_decay": 0.0001,
+  "batch_size": 512,
+  "lr_decay": true,
+  "ema": true,
+  "ema_decay": 0.999,
+  "T": 1000,
+  "cosine_s": 0.008,
+  "data_dim": 21,
+  "hidden_dim": 512,
+  "time_emb_dim": 64,
+  "init_seed": 0,
+  "z_cap": 8.0,
+  "train_seed": 20260920,
+  "n_train": 100000
+ },
+ "extra": {
+  "tag": "lrema",
+  "epochs": 450,
+  "snr_weighting": false,
+  "snr_gamma": 5.0,
+  "lr_decay": true,
+  "lr_min": 1e-05,
+  "ema": true,
+  "ema_decay": 0.999,
+  "train_seconds": 209.5399568080902,
+  "device": "mps"
+ },
+ "gate": "passed at n=1e5 (DECISIONS.md section 15.1)"
+}

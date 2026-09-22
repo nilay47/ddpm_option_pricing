@@ -4,7 +4,7 @@ change the file and the log there together.
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, Tuple
 
 import taskc  # noqa: F401  (sys.path setup for taskb)
@@ -101,3 +101,19 @@ class TaskCConfig:
 
 
 CFG = TaskCConfig()
+
+# The recipe the frozen P_theta was trained with (DECISIONS.md section 2, amended
+# 2026-09-20, and section 9). CFG keeps lr_decay/ema off so rungs 0-2 stay
+# reproducible, which means a bare `replace(CFG, ...)` silently trains the
+# constant-lr model that FAILS the step-2 gate. Anything that trains a model for
+# the paper must start from FROZEN, not from CFG.
+FROZEN = replace_cfg = TaskCConfig(epochs=450, lr_decay=True, ema=True)
+
+
+def frozen(**overrides) -> TaskCConfig:
+    """FROZEN with overrides; refuses to silently drop the recipe."""
+    cfg = replace(FROZEN, **overrides)
+    assert cfg.lr_decay and cfg.ema and cfg.epochs == 450, (
+        "the frozen recipe is 450 epochs with cosine lr decay and EMA; "
+        "override it only with a DECISIONS.md log entry")
+    return cfg
