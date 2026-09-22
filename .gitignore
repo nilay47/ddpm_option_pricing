@@ -8,3 +8,5 @@ docs/
 taskc/DECISIONS.md
 taskb/full_run.log
 taskb/volgap.log
+paper/tables/
+paper/figures/
