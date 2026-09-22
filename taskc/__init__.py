@@ -24,3 +24,7 @@ try:
     _torch.set_num_threads(int(os.environ.get("TASKC_THREADS", "4")))
 except Exception:  # torch absent or already initialised with a fixed pool
     pass
+
+# Bumped whenever a notebook's expectations of this package change; the Colab
+# notebooks assert against it so a stale cached notebook fails at cell 0.
+__version__ = "taskc-2026.09.22a"
