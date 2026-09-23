@@ -264,7 +264,7 @@ def taskc():
             for lvl in LEVELS:
                 e = s["levels"][lvl]["exotics_C"][k]
                 r.append(f"{e[0]:.4f} ({e[1]:.4f})")
-            span = HESTON_P[k] - HESTON_Q[k]
+            span = HESTON_P[k] - HESTON_Q[k]          # signed: "closed" is a fraction of the P->Q move
             closed = (HESTON_P[k] - s["levels"]["C3"]["exotics_C"][k][0]) / span * 100
             rows.append(r + [f"{HESTON_Q[k]:.4f}", f"{closed:+.0f}\\%"])
         write("taskc_exotics.tex",
@@ -421,9 +421,9 @@ def overlay():
         for k in EXO:
             d_ = s["levels"]["C3"]["exotics_C"][k][0] - base["levels"]["C3"]["exotics_C"][k][0]
             se = (s["levels"]["C3"]["exotics_C"][k][1] ** 2 + base["levels"]["C3"]["exotics_C"][k][1] ** 2) ** 0.5
-            span = HESTON_P[k] - HESTON_Q[k]
+            span = abs(HESTON_P[k] - HESTON_Q[k])          # |P - Q|: the lookback's span is negative
             mark = r"$^{*}$" if (band and tag not in retr + ["base", "lrema"] and abs(d_) > band[k]) else ""
-            r.append(f"{d_:+.4f}{mark} ({d_/se:+.1f}, {d_/span*100:+.0f}\\%)")
+            r.append(f"{d_:+.4f}{mark} ({d_/se:+.1f}, {abs(d_)/span*100:.0f}\\%)")
         r += [f"{s['levels']['C3']['ess_C']*100:.2f}", f"{s['levels']['C0']['beta_raw_norm']:.1f}"]
         rows.append(r)
     note = ""
@@ -435,7 +435,7 @@ def overlay():
     write("overlay_spread.tex",
           tabular("lcccrr", ["prior"] + [EXO_TEX[k] for k in EXO] + ["ESS \\% (C3)", r"$\|\beta_{\mathrm{raw}}\|$ (C0)"], rows),
           r"Exotic price at the fullest constraint level, as a difference from the baseline prior "
-          r"(difference, in standard errors, as a percentage of the Heston $P \to Q$ span). "
+          r"(difference, in standard errors, and as a percentage of the absolute Heston $P \to Q$ span). "
           r"$\|\beta_{\mathrm{raw}}\|$ at C0 measures how hard the martingale block alone must work on each prior.",
           "tab:overlay_spread", note=note, star=True, source=src)
 
