@@ -82,7 +82,20 @@ def q_params(p: Heston = P_PARAMS,
 
 
 def q_params_lam(p: Heston = P_PARAMS, lam_v: float = -1.0) -> Heston:
-    """Single-parameter convention: kappa_Q = kappa + xi*lam_v, kappa*theta preserved."""
+    """
+    Single-parameter convention:
+
+        kappa_Q       = kappa + xi*lam_v
+        kappa_Q*theta_Q = kappa*theta - xi*rho*(mu - r)
+
+    NOTE: kappa*theta is NOT preserved. With rho != 0 the Girsanov shift applied
+    to W^S propagates into W^v and the variance drift picks up -xi*rho*(mu-r);
+    that term is exactly why kappa and theta move under Q at all (see `q_params`,
+    which carries the general form with the kernel coefficient a). At lam_v = -1
+    the numerator is 0.12 - (0.35)(-0.7)(0.05) = 0.13225, not 0.12, so
+    theta_Q = 0.049906 and the 21-day mean vol is 20.25% (+0.25 points over P).
+    Preserving kappa*theta would instead give theta_Q = 0.045283 and 20.14%.
+    """
     kappa_q = p.kappa + p.xi * lam_v
     if kappa_q <= 0:
         raise ValueError(f"lam_v={lam_v} gives non-positive kappa_Q={kappa_q}")
