@@ -11,3 +11,8 @@ taskb/volgap.log
 paper/tables/
 paper/figures/
 paper/*.zip
+# Manuscript source and its floats: this remote is a public repo under the
+# author's own handle, and ICLR 2027 review is double-blind.
+paper/main.tex
+paper/FLOATS.md
+paper/manuscript_floats/
