@@ -27,4 +27,4 @@ except Exception:  # torch absent or already initialised with a fixed pool
 
 # Bumped whenever a notebook's expectations of this package change; the Colab
 # notebooks assert against it so a stale cached notebook fails at cell 0.
-__version__ = "taskc-2026.09.22b"   # G2b studentised (DECISIONS.md section 20)
+__version__ = "taskc-2026.09.23a"   # G2b studentised (section 20); constraint count corrected to 77 (section 17)

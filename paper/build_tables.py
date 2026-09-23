@@ -441,7 +441,8 @@ def amortization():
             f"prior and a tilt size of {arms['sw']['signal']:.4f}.")
     write("amort_agreement.tex",
           tabular("lccccc", ["exotic", "amortised (SE)", "weighted (SE)", "difference", "in SE", "SE ratio"], rows),
-          r"Agreement between the amortised sampler and the weighted representation at the full constraint set. "
+          r"Agreement between the amortised sampler and the weighted representation at the full 77-column "
+          r"constraint set (53 calibrated, 24 held out). "
           r"No exotic differs by more than two standard errors: the two are the same measure to within Monte "
           r"Carlo error.", "tab:amort_agreement", note=note, star=True, source=src)
 
