@@ -4,7 +4,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(REPO, "paper", "overleaf_tables_figures.zip")
 n = 0
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
-    for sub, exts in (("tables", (".tex",)), ("figures", (".pdf", ".png"))):
+    for sub, exts in (("tables", (".tex",)), ("figures", (".pdf", ".png", ".tex"))):
         d = os.path.join(REPO, "paper", sub)
         for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
             if f.endswith(exts):
