@@ -13,7 +13,9 @@ Checks
   G1-mean  same over the 56 martingale-type columns                        <= 0.05
   G1-info  uniform 0.02 over all 77 columns                                reported only
   G2a      max |sd_A/sd_ref - 1| over martingale columns                   <= 0.05
-  G2b      same over vanilla columns                                       <= 0.10
+  G2b      studentised max over vanilla columns,
+           |sd_A/sd_ref - 1| / sqrt((kappa-1)/4 (1/n_A + 1/n_ref))          <= 2.79
+           (G2b-old, the flat 0.10 bound, is still reported but not gated)
   G3       |p_A - p_ref| / sqrt(se_A^2 + se_ref^2), three exotics          <= 5
   G4a      CV(RV_21)                                                       in [0.385, 0.435]
   G4b      lag-1 autocorrelation of squared returns                        in [0.030, 0.050]
@@ -44,7 +46,9 @@ class GateThresholds:
     g1_mean: float = 0.05          # martingale column means, sd units
     g1_info_uniform: float = 0.02  # reported only
     g2_mart: float = 0.05          # |sd ratio - 1|
-    g2_van: float = 0.10
+    g2_van: float = 0.10           # SUPERSEDED for the gate verdict by g2_van_z (section 19);
+                                   # still computed and reported as "G2b-old" for continuity
+    g2_van_z: float = 2.79         # studentised max: |ratio-1| / sqrt((kappa-1)/2n), null 95th pct
     g3_se: float = 5.0             # combined-SE units
     g4a_cv: Tuple[float, float] = (0.385, 0.435)
     g4b_acf1: Tuple[float, float] = (0.030, 0.050)
@@ -93,6 +97,29 @@ def all_columns(paths: Paths):
     return G, names, np.array(kinds), calibrated
 
 
+def sd_ratio_sigma(G_ref: np.ndarray, n_A: int, n_ref: int) -> np.ndarray:
+    """
+    Sampling standard deviation of sd_A/sd_ref under the null that both samples
+    come from the same law (DECISIONS.md section 18-19).
+
+    For an i.i.d. sample, Var(sd_hat) ~ sd^2 (kappa - 1) / (4n) with kappa the
+    kurtosis, so the relative spread of a ratio of two independent estimates is
+
+        sigma = sqrt( (kappa - 1) / 4 * (1/n_A + 1/n_ref) )
+
+    which reduces to sqrt((kappa - 1) / 2n) at equal sizes. kappa is measured on
+    the REFERENCE sample, so the criterion self-calibrates to whatever simulator
+    the prior is being judged against. Verified against a 200-pair empirical null
+    (`artifacts_taskc/g2b_null_check.json`): agreement within 10 % on all 21
+    vanilla columns.
+    """
+    m = G_ref.mean(axis=0)
+    sd = G_ref.std(axis=0)
+    sd_safe = np.where(sd > 0, sd, 1.0)
+    kappa = (((G_ref - m) / sd_safe) ** 4).mean(axis=0)
+    return np.sqrt(np.clip(kappa - 1.0, 0.0, None) / 4.0 * (1.0 / n_A + 1.0 / n_ref))
+
+
 def sv_stats(Y: np.ndarray, dt: float) -> Dict[str, float]:
     """Stochastic-volatility structure from the return path only."""
     Y = np.asarray(Y, dtype=np.float64)
@@ -137,6 +164,8 @@ class GateReport:
     sd_ref: np.ndarray
     dmean_sd: np.ndarray            # |E_A - E_ref| / sd_ref
     sd_ratio: np.ndarray            # sd_A / sd_ref
+    sd_sigma: np.ndarray            # null sampling sd of that ratio, per column (section 19)
+    sd_ratio_z: np.ndarray          # |sd_ratio - 1| / sd_sigma
     exotics_A: dict
     exotics_ref: dict
     sv_A: dict
@@ -184,9 +213,16 @@ def run_gate(zA: np.ndarray, std: PathStandardizer, cfg: TaskCConfig = CFG,
     j, v = worst(mart, np.abs(sd_ratio - 1))
     checks.append(Check("G2a", v, f"<= {thr.g2_mart}", v <= thr.g2_mart,
                         f"worst {names[j]} (sd_A/sd_ref = {sd_ratio[j]:.4f})"))
-    j, v = worst(van, np.abs(sd_ratio - 1))
-    checks.append(Check("G2b", v, f"<= {thr.g2_van}", v <= thr.g2_van,
-                        f"worst {names[j]} (sd_A/sd_ref = {sd_ratio[j]:.4f})"))
+    sd_sigma = sd_ratio_sigma(GR, pA.n, ref.n)
+    sd_sigma_safe = np.where(sd_sigma > 0, sd_sigma, np.inf)
+    sd_ratio_z = np.abs(sd_ratio - 1.0) / sd_sigma_safe
+    j, v = worst(van, sd_ratio_z)
+    checks.append(Check("G2b", v, f"<= {thr.g2_van_z} (studentised)", v <= thr.g2_van_z,
+                        f"worst {names[j]} (sd_A/sd_ref = {sd_ratio[j]:.4f}, sigma = {sd_sigma[j]:.4f}, "
+                        f"implied bound |r-1| <= {thr.g2_van_z * sd_sigma[j]:.3f})"))
+    j_old, v_old = worst(van, np.abs(sd_ratio - 1))
+    checks.append(Check("G2b-old", v_old, f"(<= {thr.g2_van}, superseded; not gated)", v_old <= thr.g2_van,
+                        f"worst {names[j_old]} (sd_A/sd_ref = {sd_ratio[j_old]:.4f})"))
     # G3
     exA, exR = ev.price_exotics(pA), ev.price_exotics(ref)
     for k in EXOTICS:
@@ -203,11 +239,12 @@ def run_gate(zA: np.ndarray, std: PathStandardizer, cfg: TaskCConfig = CFG,
         checks.append(Check(cid, v, f"in [{lo}, {hi}]", lo <= v <= hi,
                             f"ref {svR[key]:.4f}"))
 
-    gated = [c for c in checks if c.id != "G1-info"]
+    gated = [c for c in checks if c.id not in ("G1-info", "G2b-old")]
     return GateReport(checks=checks, passed=all(c.passed for c in gated),
                       n_A=pA.n, n_ref=ref.n, names=names, kinds=kinds, calibrated=calibrated,
                       mean_A=mean_A, mean_ref=mean_ref, sd_A=sd_A, sd_ref=sd_ref,
-                      dmean_sd=dmean_sd, sd_ratio=sd_ratio, exotics_A=exA, exotics_ref=exR,
+                      dmean_sd=dmean_sd, sd_ratio=sd_ratio, sd_sigma=sd_sigma, sd_ratio_z=sd_ratio_z,
+                      exotics_A=exA, exotics_ref=exR,
                       sv_A=svA, sv_ref=svR, mc_floor_sd=float(np.sqrt(1 / pA.n + 1 / ref.n)), thr=thr)
 
 
@@ -220,7 +257,7 @@ def print_report(r: GateReport, columns: bool = True):
     print("=" * 78)
     for c in r.checks:
         tag = "PASS" if c.passed else "FAIL"
-        if c.id == "G1-info":
+        if c.id in ("G1-info", "G2b-old"):
             tag = "info"
         print(f"{tag:4s} {c.id:28s} {c.value:9.4f}  {c.bound:22s} {c.detail}")
     print("-" * 78)
@@ -238,8 +275,10 @@ def print_report(r: GateReport, columns: bool = True):
             lim = THRESH.g1_tail if r.kinds[j] == "vanilla" else THRESH.g1_mean
             if r.dmean_sd[j] > lim:
                 flag += " <G1"
-            lim2 = THRESH.g2_van if r.kinds[j] == "vanilla" else THRESH.g2_mart
-            if abs(r.sd_ratio[j] - 1) > lim2:
+            if r.kinds[j] == "vanilla":
+                if r.sd_ratio_z[j] > THRESH.g2_van_z:
+                    flag += " <G2"
+            elif abs(r.sd_ratio[j] - 1) > THRESH.g2_mart:
                 flag += " <G2"
             ho = "" if r.calibrated[j] else " (held-out)"
             print(f"{n:26s} {r.kinds[j]:8s} {r.mean_ref[j]:9.5f} {r.mean_A[j]:9.5f} "

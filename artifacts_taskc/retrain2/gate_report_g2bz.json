@@ -1,0 +1,108 @@
+{
+  "G1-tail": {
+    "value": 0.00898223679787195,
+    "passed": true,
+    "bound": "<= 0.02",
+    "detail": "worst call[T=15d,K=95] (E_A 5.91005 vs E_ref 5.94802)"
+  },
+  "G1-mean": {
+    "value": 0.011671234734642728,
+    "passed": true,
+    "bound": "<= 0.05",
+    "detail": "worst mart[1@8] (E_A 0.00834 vs E_ref 0.02297)"
+  },
+  "G1-info": {
+    "value": 0.011671234734642728,
+    "passed": true,
+    "bound": "(uniform 0.02, not gated)",
+    "detail": "0/77 columns above 0.02; worst mart[1@8]"
+  },
+  "G2a": {
+    "value": 0.024176561394568474,
+    "passed": true,
+    "bound": "<= 0.05",
+    "detail": "worst mart[RV5@11] (sd_A/sd_ref = 0.9758)"
+  },
+  "G2b": {
+    "value": 1.8794146723904466,
+    "passed": true,
+    "bound": "<= 2.79 (studentised)",
+    "detail": "worst call[T=21d,K=105] (sd_A/sd_ref = 0.9854, sigma = 0.0077, implied bound |r-1| <= 0.022)"
+  },
+  "G2b-old": {
+    "value": 0.08847259811645736,
+    "passed": true,
+    "bound": "(<= 0.1, superseded; not gated)",
+    "detail": "worst call[T=21d,K=115] (sd_A/sd_ref = 0.9115)"
+  },
+  "G3:asian_call_K100": {
+    "value": 1.5157184973972722,
+    "passed": true,
+    "bound": "<= 5.0",
+    "detail": "A 1.5999+-0.0065  ref 1.6140+-0.0066  diff -0.0141 (-0.87%)"
+  },
+  "G3:uo_barrier_call_K100_B110": {
+    "value": 1.1689261529939408,
+    "passed": true,
+    "bound": "<= 5.0",
+    "detail": "A 2.0405+-0.0085  ref 2.0546+-0.0085  diff -0.0141 (-0.68%)"
+  },
+  "G3:lookback_float_call": {
+    "value": 1.7797672115630574,
+    "passed": true,
+    "bound": "<= 5.0",
+    "detail": "A 4.4032+-0.0109  ref 4.4308+-0.0110  diff -0.0276 (-0.62%)"
+  },
+  "G4a": {
+    "value": 0.4042760965816226,
+    "passed": true,
+    "bound": "in [0.385, 0.435]",
+    "detail": "ref 0.4088"
+  },
+  "G4b": {
+    "value": 0.036699725534881246,
+    "passed": true,
+    "bound": "in [0.03, 0.05]",
+    "detail": "ref 0.0405"
+  },
+  "G4c": {
+    "value": -0.10382745537528179,
+    "passed": true,
+    "bound": "in [-0.129, -0.077]",
+    "detail": "ref -0.1033"
+  },
+  "passed": true,
+  "n_A": 100000,
+  "n_ref": 100000,
+  "thresholds": {
+    "g4a_cv": [
+      0.385,
+      0.435
+    ],
+    "g4b_acf1": [
+      0.03,
+      0.05
+    ],
+    "g4c_lev5": [
+      -0.129,
+      -0.077
+    ],
+    "own_simulator_bands": false
+  },
+  "sv_A": {
+    "cv_rv": 0.4042760965816226,
+    "acf1_sq": 0.036699725534881246,
+    "lev1": -0.05097285319110746,
+    "lev5": -0.10382745537528179,
+    "rv_mean": 0.03966104199430652,
+    "rv_sd": 0.016034011243818053
+  },
+  "sv_ref": {
+    "cv_rv": 0.40878690832744474,
+    "acf1_sq": 0.04049943033973307,
+    "lev1": -0.051410421111530664,
+    "lev5": -0.10334209999190608,
+    "rv_mean": 0.03999216595765988,
+    "rv_sd": 0.016348273879149864
+  }
+}
