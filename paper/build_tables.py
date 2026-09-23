@@ -18,6 +18,8 @@ import os
 import re
 from datetime import date
 
+import numpy as np
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TAB = os.path.join(REPO, "paper", "tables")
 FIG = os.path.join(REPO, "paper", "figures")
@@ -28,6 +30,52 @@ EXO_TEX = {"asian_call_K100": "Asian call ($K=100$)",
 HESTON_P = {"asian_call_K100": 1.61319, "uo_barrier_call_K100_B110": 2.05449, "lookback_float_call": 4.43604}
 HESTON_Q = {"asian_call_K100": 1.57207, "uo_barrier_call_K100_B110": 1.76547, "lookback_float_call": 4.62501}
 LEVELS = ["C0", "C1", "C2", "C3"]
+
+PENDING_MATURITY = r"""% ---------------------------------------------------------------------------
+% PENDING DISCLOSURE -- CARRIED FORWARD from the pre-regeneration table, then
+% RESOLVED by the regenerated run. Original note, verbatim:
+%
+%   PENDING DISCLOSURE -- not inserted, see note to authors. If this table's
+%   SMT column did receive the final mean adjustment, add:
+%     The SMT columns include the final adjustment to the target mean.
+%   As reported, SMT and no-shift differ by <=0.003 at every H; a mean
+%   adjustment of (mu-r)*Delta t per step should move the H=21 ATM price by
+%   roughly 0.3. The numbers are not consistent with the adjustment having
+%   been applied, so the sentence is held until the run is checked.
+%
+% RESOLUTION (run checked; artifacts_gauss/colab_A100/gauss_appendix.json):
+%   The sentence is NOT added. No mean adjustment was applied anywhere in the
+%   regenerated run -- de-standardisation uses the source mean once and there is
+%   no end-of-process recentring. The old columns were inconsistent for a
+%   different reason: they were not distinct runs. In the regenerated table the
+%   H=21 ATM price moves 2.820 -> 2.533 between no shift and exact SMT, a shift
+%   of 0.287 against the ~0.3 the note predicted, so the correction is now
+%   visible in the numbers rather than absent from them.
+% ---------------------------------------------------------------------------"""
+
+PENDING_2D = r"""% ---------------------------------------------------------------------------
+% PENDING DISCLOSURE -- CARRIED FORWARD from the pre-regeneration table, then
+% RESOLVED by the regenerated run. Original note, verbatim:
+%
+%   PENDING DISCLOSURE -- not inserted, see note to authors. If this run
+%   received the final mean adjustment, add:
+%     Exact SMT includes the final adjustment to the target mean.
+%   As reported, Exact SMT lands at (1.80, 0.89) against a target of
+%   (2.00, 1.00). An adjustment to the target mean would place it at the
+%   target. The sentence is held until the run is checked; the "90% and 89%
+%   of the required displacement" framing depends on the same answer.
+%
+% RESOLUTION (run checked; artifacts_gauss/colab_A100/gauss_appendix.json):
+%   The sentence is NOT added -- no adjustment was applied. The regenerated run
+%   reaches (1.865, 0.917) against the (2.00, 1.00) target, i.e. 93% and 92% of
+%   the displacement, with standard deviations at 82% and 86% of target. The
+%   shortfall is real and is reported as a finite-network extrapolation limit:
+%   the corrected chain visits states the source-trained network never saw, and
+%   the error grows with the size of the measure change (12% of a 0.02 sd shift
+%   in one dimension, 7-8% of a 2-4 sd shift here). The percentages in the
+%   caption are therefore 93/92, not 90/89, and the framing must present the
+%   gap up front as a measured limit rather than explain it afterwards.
+% ---------------------------------------------------------------------------"""
 PRIOR_TEX = {"base": "baseline", "retrain1": "retrain 1", "retrain2": "retrain 2",
              "mu25": r"$\mu = 0.25$", "rho02": r"$\rho = -0.2$", "kappa6": r"$\kappa = 6$"}
 
@@ -292,10 +340,7 @@ def taskc():
               r"model was trained; the one amendment is recorded in the appendix. G3 entries are in units of the "
               r"combined standard error.",
               "tab:taskc_gate", note=note, source=src_gate)
-        # alias: the manuscript inputs this table as tables/app_gate
-        import shutil
-        shutil.copyfile(os.path.join(TAB, "taskc_gate.tex"), os.path.join(TAB, "app_gate.tex"))
-        print("  wrote tables/app_gate.tex (alias of taskc_gate.tex)")
+
 
     s = load("artifacts_taskc", "lrema", "sweep", "sweep.json", required=False)
     if s:
@@ -505,7 +550,137 @@ def overlay():
 
 # --------------------------------------------------------------------------
 
-EMITTERS = dict(gaussian=gaussian, taskb=taskb, taskc=taskc, amortization=amortization, overlay=overlay)
+
+# --------------------------------------------------------------------------
+# Manuscript aliases: the paper inputs these floats under its own names and
+# labels (paper/FLOATS.md hard constraint 1: labels must not change). We emit a
+# second copy per file with the manuscript's \label and, where the manuscript
+# carries an unresolved marker, that marker carried forward verbatim plus its
+# resolution. Main-text floats (projection, exotics) are NOT regenerated: their
+# numbers already trace and they carry page-budget formatting we must not touch.
+# --------------------------------------------------------------------------
+
+ALIASES = {
+    # our file              manuscript file        manuscript label      carried-forward block
+    "gauss_table6.tex":        ("app_gaussian_full.tex",   "tab:app_gaussian_full",   None),
+    "gauss_table7_lambda.tex": ("app_ablation_lambda.tex", "tab:app_ablation_lambda", None),
+    "gauss_table9_maturity.tex": ("app_maturity.tex",      "tab:app_maturity",        "MATURITY"),
+    "gauss_table10_terminal.tex": ("app_terminal.tex",     "tab:app_terminal",        None),
+    "gauss_table13_2d.tex":    ("app_2d.tex",              "tab:app_2d",              "TWOD"),
+    "taskc_gate.tex":          ("app_gate.tex",            "tab:app_gate",            None),
+}
+BLOCKS = {"MATURITY": PENDING_MATURITY, "TWOD": PENDING_2D}
+
+
+def manuscript_aliases():
+    """Write the manuscript-named copies. Called last, after every emitter."""
+    import re as _re
+    for ours, (theirs, label, block) in ALIASES.items():
+        src = os.path.join(TAB, ours)
+        if not os.path.exists(src):
+            print(f"  alias skipped: {ours} not generated")
+            continue
+        body = open(src).read()
+        body = _re.sub(r"\\label\{[^}]*\}", lambda _m: "\\label{" + label + "}", body)
+        body = body.replace("% generated by", f"% manuscript alias of tables/{ours}; label kept as {label}\n% generated by", 1)
+        if block:
+            marker = "\\caption{"
+            i = body.index(marker)
+            body = body[:i] + BLOCKS[block] + "\n" + body[i:]
+        with open(os.path.join(TAB, theirs), "w") as f:
+            f.write(body)
+        print(f"  wrote tables/{theirs} (alias of {ours}, label {label}" + (", disclosure block carried forward)" if block else ")"))
+
+
+# --------------------------------------------------------------------------
+# KL-budgeted price intervals (taskc/kl_budget.py) + the LP bounds it ends at
+# --------------------------------------------------------------------------
+
+KL_LEVELS = (0.05, 0.10, 0.25, 0.50, 1.00)
+
+
+def _kl_price_at(branch, k, q_star, kl_floor):
+    """Price on one branch at total-KL budget k; None once the branch runs out."""
+    xs = sorted([(kl_floor, q_star)] + [(b["kl"], b["price"]) for b in branch])
+    kl = [a for a, _ in xs]; pr = [b for _, b in xs]
+    if k <= kl[0]:
+        return q_star
+    if k >= kl[-1]:
+        return None
+    return float(np.interp(k, kl, pr))
+
+
+def kl_budget():
+    d = load("artifacts_taskc", "lrema", "kl_budget.json", required=False)
+    if d is None:
+        print("  skipped kl_budget: artifacts_taskc/lrema/kl_budget.json missing")
+        return
+    mot = load("artifacts_taskc", "lrema", "mot_bounds.json", required=False)
+    ov = _overlay_data()[0] or {}
+    src = "artifacts_taskc/lrema/kl_budget.json" + (" + mot_bounds.json" if mot else "")
+    kf = d["kl_floor"]
+
+    # ---- figure
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    os.makedirs(FIG, exist_ok=True)
+    fig, ax = plt.subplots(1, 3, figsize=(13.5, 4.2))
+    mis = {"mu25": (r"$\mu=0.25$", "C2"), "rho02": (r"$\rho=-0.2$", "C4"), "kappa6": (r"$\kappa=6$", "C1")}
+    for axi, k in zip(ax, EXO):
+        c = d["curves"][k]
+        for br in (c["upper"], c["lower"]):
+            xs = [kf] + [b["kl"] for b in br]; ys = [c["q_star"]] + [b["price"] for b in br]
+            o = np.argsort(xs)
+            axi.plot(np.array(xs)[o], np.array(ys)[o], "-o", ms=3, lw=1.6, color="C0")
+        axi.plot([kf], [c["q_star"]], "o", ms=7, color="C3", zorder=5, label=r"$Q^*$ (KL floor)")
+        if mot:
+            axi.axhline(mot["exotics"][k]["lower"], ls=":", lw=1, color="0.4")
+            axi.axhline(mot["exotics"][k]["upper"], ls=":", lw=1, color="0.4", label="LP bound (no KL cap)")
+        axi.axhline(HESTON_Q[k], ls="--", lw=1, color="k", label="Heston-$Q$")
+        for t, (lab, col) in mis.items():
+            if t in ov:
+                axi.plot([kf * 1.02], [ov[t]["levels"]["C3"]["exotics_C"][k][0]], "v", ms=5, color=col, label=lab)
+        axi.set_xscale("log"); axi.set_xlabel(r"KL$(Q\,\|\,P_\theta)$  (nats)")
+        axi.set_title(EXO_TEX[k], fontsize=9); axi.grid(alpha=0.25)
+    ax[0].set_ylabel("price"); ax[0].legend(fontsize=6.5, frameon=False, loc="upper left")
+    fig.tight_layout(); fig.savefig(os.path.join(FIG, "kl_budget.pdf"), bbox_inches="tight"); plt.close(fig)
+    print("  wrote figures/kl_budget.pdf")
+    write_figure("kl_budget",
+                 r"Price intervals under a relative-entropy budget. Each curve is the maximum and minimum of "
+                 r"$\mathbb{E}_Q[f]$ over measures satisfying the same 53 constraints with "
+                 r"$\mathrm{KL}(Q\,\|\,P_\theta)$ at most the abscissa; the optimum is the prior tilted by "
+                 r"$\exp(\beta^\top g + \gamma f)$ and $\beta$ is re-solved at every $\gamma$. The red marker is "
+                 r"the projected measure $Q^*$, which sits at the KL floor: no measure meeting the constraints is "
+                 r"closer to the prior. Dotted lines are the sample-restricted linear-programming bounds, the limit "
+                 r"as the budget grows without bound. Triangles are the C3 prices of the misspecified priors.",
+                 "fig:kl_budget", star=True)
+
+    # ---- table
+    rows = [[f"floor, {kf:.4f} ($Q^*$)"] + [f"{d['curves'][k]['q_star']:.4f}" for k in EXO]]
+    for kk in KL_LEVELS:
+        r = [f"{kk:.2f}"]
+        for k in EXO:
+            c = d["curves"][k]
+            lo = _kl_price_at(c["lower"], kk, c["q_star"], kf)
+            hi = _kl_price_at(c["upper"], kk, c["q_star"], kf)
+            r.append(f"[{lo:.4f}, {hi:.4f}]" if lo is not None and hi is not None
+                     else (f"[{lo:.4f}, sat.]" if lo is not None else "---"))
+        rows.append(r)
+    if mot:
+        rows.append([r"$\infty$ (LP)"] + [f"[{mot['exotics'][k]['lower']:.4f}, {mot['exotics'][k]['upper']:.4f}]" for k in EXO])
+    note = (r"``sat.'' marks a branch whose price has reached the payoff's attainable maximum, so further budget "
+            r"buys no movement. Intervals are sample-restricted: the optimisation ranges only over measures "
+            r"supported on the $10^6$ sampled paths, so they are inner approximations of the unrestricted bounds.")
+    write("kl_budget.tex",
+          tabular("l" + "c" * len(EXO), ["KL budget (nats)"] + [EXO_TEX[k] for k in EXO], rows, rules=(1,)),
+          r"Exotic price intervals as a function of the relative-entropy budget, all satisfying the same 53 "
+          r"constraints. The budget is total $\mathrm{KL}(Q\,\|\,P_\theta)$, whose floor is the projected "
+          r"measure itself.", "tab:kl_budget", note=note, star=True, source=src)
+
+
+EMITTERS = dict(gaussian=gaussian, taskb=taskb, taskc=taskc, amortization=amortization,
+                overlay=overlay, kl_budget=kl_budget)
 
 
 def main():
@@ -519,6 +694,9 @@ def main():
             EMITTERS[name]()
         except Exception as e:                                   # one bad artifact must not stop the rest
             print(f"  FAILED {name}: {type(e).__name__}: {e}")
+    if not args.only or "gaussian" in (args.only or []) or "taskc" in (args.only or []):
+        print("[manuscript aliases]")
+        manuscript_aliases()
 
 
 if __name__ == "__main__":
