@@ -403,11 +403,16 @@ def taskc():
 # --------------------------------------------------------------------------
 
 def amortization():
-    a = load("artifacts_taskc", "lrema", "amort74_colab", "amortization.json", required=False)
+    # amort77_colab is the run tag after the constraint count was corrected; the
+    # earlier amort74_colab holds the same 77-column run under its old, wrong name.
+    for tag in ("amort77_colab", "amort74_colab"):
+        a = load("artifacts_taskc", "lrema", tag, "amortization.json", required=False)
+        if a is not None:
+            break
     if a is None:
-        print("  skipped amortization: artifacts_taskc/lrema/amort74_colab/amortization.json missing")
+        print("  skipped amortization: artifacts_taskc/lrema/{amort77,amort74}_colab/amortization.json missing")
         return
-    src = "artifacts_taskc/lrema/amort74_colab/amortization.json"
+    src = f"artifacts_taskc/lrema/{tag}/amortization.json"
     st = a["stages"]
     b, arms = st["budget"], st["arms"]
     w, A = b["armW"], b["armA"]

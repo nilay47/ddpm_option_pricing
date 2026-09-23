@@ -27,7 +27,7 @@ so `\input{tables/<name>}` is all the document needs. Preamble requirements:
 | `tables/taskc_dual.tex` | `tab:taskc_dual` | dual on P_theta: screen margin, beta_raw, ESS, KL, held-out (`table*`) | `artifacts_taskc/lrema/sweep/sweep.json` |
 | `tables/taskc_exotics.tex` | `tab:taskc_exotics` | exotics under the projection with the learned prior (`table*`) | same |
 | `tables/taskc_prior_acceptance.tex` | `tab:prior_acceptance` | frozen-prior acceptance: which priors passed, tightest check, drops | `artifacts_taskc/*/gate_report.json` |
-| `tables/amort_compute.tex` | `tab:amort_compute` | compute per arm: paths, network evaluations, wall-clock | `artifacts_taskc/lrema/amort74_colab/amortization.json` |
+| `tables/amort_compute.tex` | `tab:amort_compute` | compute per arm: paths, network evaluations, wall-clock | `artifacts_taskc/lrema/amort77_colab/` (or the older `amort74_colab/`) `amortization.json` |
 | `tables/amort_agreement.tex` | `tab:amort_agreement` | weighted vs amortised agreement on the exotics (`table*`) | same |
 | **`tables/overlay_spread.tex`** | `tab:overlay_spread` | C3 spread per prior with the retrain band (`table*`) | `artifacts_overlay/overlay.json` |
 | **`figures/overlay_identification.pdf`** | — | exotic price vs constraint level, one band per prior | same |
