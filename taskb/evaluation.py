@@ -36,6 +36,10 @@ def exotic_payoff(paths: Paths, kind: str, **kw) -> np.ndarray:
     if kind == "lookback_float":              # floating-strike lookback call
         return disc * (S[:, -1] - S.min(axis=1))
 
+    if kind == "down_and_in":                 # daily-monitored knock-in put
+        hit = S[:, 1:].min(axis=1) <= kw["B"]
+        return disc * np.maximum(kw["K"] - S[:, -1], 0.0) * hit
+
     raise ValueError(f"unknown exotic '{kind}'")
 
 
