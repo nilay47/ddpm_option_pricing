@@ -685,8 +685,92 @@ def kl_budget():
           r"measure itself.", "tab:kl_budget", note=note, star=True, source=src)
 
 
+
+# --------------------------------------------------------------------------
+# AAPL event figure (DECISIONS.md 26.R.7, 26.R.9, 26.T)
+# --------------------------------------------------------------------------
+
+AAPL_ARMS = [("ddpm", "Path DDPM", "C0", "o", "-"),
+             ("heston_mom", "Heston MoM", "C1", "s", "-"),
+             ("student_t", "Student-$t$ iid", "C2", "^", "-"),
+             ("bs_gaussian", "Black\u2013Scholes", "C3", "D", "-")]
+AAPL_FLOOR = 0.10        # 26.R.3: below this the metric is a vanishing denominator
+AAPL_DTES = [7, 9, 11, 18]
+AAPL_EARNINGS_DTE = 10.0  # 2026-04-30 sits between the 04-29 (dte 9) and 05-01 (dte 11) expiries
+
+
+def aapl_event():
+    d = load("artifacts_taskc", "aapl", "aapl.json", required=False)
+    if d is None:
+        print("  skipped aapl_event: artifacts_taskc/aapl/aapl.json missing")
+        return
+    src = "artifacts_taskc/aapl/aapl.json"
+    A = d["stages"]["arms"]
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    os.makedirs(FIG, exist_ok=True)
+
+    def med(arm, dte, signed):
+        rows = [r for r in A[arm]["heldout_contracts"]
+                if r["dte"] == dte and r["spread"] >= AAPL_FLOOR]
+        v = np.array([r["err_spreads"] for r in rows], dtype=float)
+        return float(np.median(v if signed else np.abs(v))), len(v)
+
+    # aspect ~4.06 so the 4.3cm height cap binds at close to \textwidth (kl_budget uses ~3.21)
+    fig, ax = plt.subplots(1, 2, figsize=(13.0, 3.2))
+    x = np.arange(len(AAPL_DTES))
+    xe = np.interp(AAPL_EARNINGS_DTE, AAPL_DTES, x)          # earnings between dte 9 and 11
+    for panel, signed in ((ax[0], True), (ax[1], False)):
+        panel.axvspan(xe - 0.10, xe + 0.10, color="0.82", zorder=0)
+        panel.axvline(xe, color="0.35", lw=1.1, ls="--", zorder=1)
+        if signed:
+            panel.axhline(0.0, color="k", lw=1.0, zorder=1)
+        for arm, lab, col, mk, ls in AAPL_ARMS:
+            ys = [med(arm, t, signed)[0] for t in AAPL_DTES]
+            panel.plot(x, ys, ls, marker=mk, ms=4.5, lw=1.6, color=col, label=lab, zorder=3)
+        panel.set_xticks(x)
+        panel.set_xticklabels([f"{t}\n({med('ddpm', t, True)[1]})" for t in AAPL_DTES])
+        panel.set_xlabel("expiry (days to expiry; contracts in parentheses)")
+        panel.set_xlim(-0.25, len(AAPL_DTES) - 0.75)
+        panel.grid(alpha=0.25, zorder=0)
+    ax[0].set_ylabel("signed median error (spreads)")
+    ax[1].set_ylabel("absolute median error (spreads)")
+    ax[0].set_title("every arm overprices before the event, underprices after", fontsize=9)
+    ax[1].set_title("absolute error: the ordering reverses across the event", fontsize=9)
+    yl = ax[0].get_ylim()
+    ax[0].annotate("earnings\n2026-04-30", xy=(xe, yl[1]), xytext=(xe + 0.10, yl[1] - 0.10 * (yl[1] - yl[0])),
+                   fontsize=7, color="0.25", ha="left", va="top")
+    ax[0].text(0.5 * (0 + xe) / 1.0, yl[0] + 0.06 * (yl[1] - yl[0]), "expires BEFORE",
+               fontsize=6.5, color="0.35", ha="center")
+    ax[0].text(0.5 * (xe + x[-1]), yl[0] + 0.06 * (yl[1] - yl[0]), "contains the event",
+               fontsize=6.5, color="0.35", ha="center")
+    ax[0].legend(fontsize=7, frameon=False, loc="lower left")
+    fig.tight_layout()
+    fig.savefig(os.path.join(FIG, "aapl_event.pdf"), bbox_inches="tight")
+    plt.close(fig)
+    print("  wrote figures/aapl_event.pdf")
+    write_figure("aapl_event",
+                 r"Held-out pricing error on the frozen AAPL surface (as-of 2026-04-20), by expiry, at a "
+                 r"ten-cent floor on the bid--ask spread. Error is the median over contracts of "
+                 r"$(\text{model} - \text{mid})/(\text{ask} - \text{bid})$; the calibrated expiry is "
+                 r"25 days and every expiry shown is held out. Apple reported fiscal Q2 2026 on "
+                 r"2026-04-30, between the 9- and 11-day expiries (dashed line): the two shorter expiries "
+                 r"mature before that date, the two longer ones contain it. \textbf{Left:} the signed error "
+                 r"changes sign at the event for all four priors, positive before and negative after. Each "
+                 r"prior is time-homogeneous and is calibrated to a 25-day surface that contains the event, "
+                 r"so it spreads that variance uniformly in calendar time -- overcharging windows without "
+                 r"the event and undercharging the short windows that contain it. \textbf{Right:} absolute "
+                 r"error on the same axis. The ordering reverses across the event: on the event-bearing "
+                 r"expiries taken together the learned prior is the most accurate arm (0.43 spreads against "
+                 r"0.49, 0.71 and 1.12), though the Student-$t$ is lower at 11 days taken alone; before the "
+                 r"event the ordering is reversed and the learned prior is the least accurate. Pooling the "
+                 r"two groups cancels the signed errors and hides both effects.",
+                 "fig:aapl_event", star=True)
+
+
 EMITTERS = dict(gaussian=gaussian, taskb=taskb, taskc=taskc, amortization=amortization,
-                overlay=overlay, kl_budget=kl_budget)
+                overlay=overlay, kl_budget=kl_budget, aapl_event=aapl_event)
 
 
 def main():
