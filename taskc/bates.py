@@ -317,3 +317,100 @@ def bates_thresholds(ref: Paths, dt: float = 1 / 252.0):
         return (v - hw, v + hw)
 
     return GateThresholds(g4a_cv=g4a, g4b_acf1=band(sv["acf1_sq"]), g4c_lev5=band(sv["lev5"]))
+
+
+# --------------------------------------------------------------------------
+# fitting Bates to paths (DECISIONS.md section 27, arm 3)
+# --------------------------------------------------------------------------
+
+def fit_bates_mle(rets: np.ndarray, dt: float = 1 / 252.0, block: int = 21,
+                  fix_dynamics=None) -> "Bates":
+    """
+    Two-stage estimator on daily log-returns.
+
+    Stage 1, the jump part, by MLE on the one-day mixture. Over a single day
+    P(N = 0) = 1 - lam*dt and P(N = 1) ~ lam*dt, so
+
+        r ~ (1 - lam dt) N(m, v dt)  +  (lam dt) N(m + mu_J, v dt + sig_J^2),
+
+    a two-component Gaussian mixture whose weight is tied to lam. Fitting the
+    mixture rather than thresholding avoids the truncation bias that makes a
+    threshold estimator miss small jumps (understating lam) and keep only large
+    ones (overstating sig_J).
+
+    Stage 2, the diffusive part: kappa, xi, rho from `fit_heston_mom` applied to
+    returns with detected jumps truncated, using the fitted jump law to set the
+    threshold.
+    """
+    from scipy.optimize import minimize
+    from taskc.aapl import fit_heston_mom   # the AAPL fitter, reused (section 27 arm 2/3)
+    r = np.asarray(rets, dtype=np.float64).ravel()
+
+    def nll(p):
+        log_v, m, mu_j, log_sj, log_lam = p
+        v, sj, lam = np.exp(log_v), np.exp(log_sj), np.exp(log_lam)
+        w1 = np.clip(lam * dt, 1e-12, 0.5)
+        s0, s1 = np.sqrt(v * dt), np.sqrt(v * dt + sj ** 2)
+        a = np.log1p(-w1) - 0.5 * ((r - m) / s0) ** 2 - np.log(s0)
+        b = np.log(w1) - 0.5 * ((r - m - mu_j) / s1) ** 2 - np.log(s1)
+        return -float(np.sum(np.logaddexp(a, b)))
+
+    x0 = np.array([np.log(max(r.var() / dt, 1e-6)), float(r.mean()), -0.03, np.log(0.04), np.log(5.0)])
+    res = minimize(nll, x0, method="Nelder-Mead",
+                   options=dict(maxiter=20000, maxfev=20000, xatol=1e-8, fatol=1e-8))
+    log_v, m, mu_j, log_sj, log_lam = res.x
+    v, sig_j, lam = float(np.exp(log_v)), float(np.exp(log_sj)), float(np.exp(log_lam))
+
+    # stage 2: truncate at 4 sd of the diffusive part and fit the variance dynamics
+    thr = 4.0 * np.sqrt(v * dt)
+    R2 = np.asarray(rets, dtype=np.float64)
+    if fix_dynamics is not None:
+        # (kappa, xi, rho) are NOT identifiable from 21-day paths started at v0 = theta:
+        # across kappa = 3, 15, 30 the 21-day return sd is 5.800 / 5.795 / 5.790 %, and the
+        # measurement noise in a sub-block realized variance is ~3.6x the genuine variation
+        # in v. Passing them in isolates the jump misspecification, which is what this
+        # experiment is about -- and hands the parametric arms information the learned prior
+        # has to find for itself. See DECISIONS.md section 27.2.
+        kappa, xi, rho = fix_dynamics
+        return Bates(S0=100.0, v0=v, drift=float(m / dt), r=0.05,
+                     kappa=kappa, theta=v, xi=xi, rho=rho,
+                     lam=lam, mu_j=float(mu_j), sig_j=sig_j)
+    if R2.ndim == 2:                      # panel of independent paths: identify within-path
+        R_diff = np.where(np.abs(R2 - m) > thr, 0.0, R2)
+        kappa, xi, rho = fit_variance_dynamics_panel(R_diff, theta=v, dt=dt)
+    else:                                 # one long series: the AAPL estimator is correct
+        h = fit_heston_mom(np.where(np.abs(R2 - m) > thr, 0.0, R2), dt=dt, block=block)
+        kappa, xi, rho = h.kappa, h.xi, h.rho
+    return Bates(S0=100.0, v0=v, drift=float(m / dt), r=0.05,
+                 kappa=kappa, theta=v, xi=xi, rho=rho,
+                 lam=lam, mu_j=float(mu_j), sig_j=sig_j)
+
+
+def fit_variance_dynamics_panel(R: np.ndarray, theta: float, dt: float = 1 / 252.0, sub: int = 7):
+    """
+    kappa, xi, rho from a PANEL of independent H-step paths.
+
+    `taskc.aapl.fit_heston_mom` estimates mean reversion from the lag-1 correlation of
+    consecutive realized-variance blocks, which is right for one long series and wrong
+    here: consecutive paths are independent, so that correlation is zero and kappa runs
+    to its clip. Identification has to come from WITHIN each path. Each path is cut into
+    H//sub sub-blocks and the lag-1 correlation is pooled over paths, which identifies
+    mean reversion at the sub-block scale.
+
+    Returns (kappa, xi, rho).
+    """
+    R = np.asarray(R, dtype=np.float64)
+    n, H = R.shape
+    k = H // sub
+    if k < 2:
+        raise ValueError(f"need at least two sub-blocks per path: H={H}, sub={sub}")
+    B = R[:, :k * sub].reshape(n, k, sub)
+    RV = (B ** 2).sum(axis=2) / (sub * dt)                 # (n, k) annualised per sub-block
+    a = RV[:, :-1].ravel(); b = RV[:, 1:].ravel()
+    a1 = float(np.corrcoef(a, b)[0, 1])
+    a1 = min(max(a1, 1e-3), 0.999)
+    kappa = float(-np.log(a1) / (sub * dt))
+    var_rv = max(RV.ravel().var(ddof=1) - 2.0 * theta ** 2 / sub, 1e-12)
+    xi = float(np.sqrt(max(2.0 * kappa * var_rv / max(theta, 1e-12), 1e-12)))
+    rho = float(np.corrcoef(B.sum(axis=2).ravel(), RV.ravel())[0, 1])
+    return kappa, xi, min(max(rho, -0.95), -0.01)

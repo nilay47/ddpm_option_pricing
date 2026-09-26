@@ -27,4 +27,4 @@ except Exception:  # torch absent or already initialised with a fixed pool
 
 # Bumped whenever a notebook's expectations of this package change; the Colab
 # notebooks assert against it so a stale cached notebook fails at cell 0.
-__version__ = "taskc-2026.09.25c"   # + aapl.py: real-data experiment on the frozen surface (section 26)
+__version__ = "taskc-2026.09.25d"   # + Bates fitter and panel dynamics (section 27)
