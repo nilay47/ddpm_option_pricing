@@ -86,7 +86,8 @@ BATES_EXOTICS: Dict[str, dict] = {
 # simulation
 # --------------------------------------------------------------------------
 
-def simulate_bates(b: Bates, sim: SimConfig, world: str = "P", chunk: int = 25_000) -> Paths:
+def simulate_bates(b: Bates, sim: SimConfig, world: str = "P", chunk: int = 25_000,
+                   return_jumps: bool = False):
     """
     Full-truncation Euler on (log S, v) with a compound-Poisson jump added per step.
     Mirrors taskb.heston.simulate exactly on the diffusive part, including the
@@ -96,6 +97,7 @@ def simulate_bates(b: Bates, sim: SimConfig, world: str = "P", chunk: int = 25_0
     rng = np.random.default_rng(sim.seed)
     S = np.empty((n, H + 1), dtype=np.float64)
     V = np.empty((n, H + 1), dtype=np.float64)
+    NJ = np.zeros((n, H), dtype=np.int16)          # jumps per step, for the z-cap diagnostic
     kbar = b.kbar
 
     for lo in range(0, n, chunk):
@@ -123,8 +125,10 @@ def simulate_bates(b: Bates, sim: SimConfig, world: str = "P", chunk: int = 25_0
 
             S[lo:hi, s + 1] = np.exp(logS)
             V[lo:hi, s + 1] = v
+            NJ[lo:hi, s] = N
 
-    return Paths(S=S, v=V, r=b.r, dt=dt, world=world)
+    P = Paths(S=S, v=V, r=b.r, dt=dt, world=world)
+    return (P, NJ) if return_jumps else P
 
 
 # --------------------------------------------------------------------------
